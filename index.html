@@ -2,118 +2,118 @@
 <html lang="en">
 
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bola Runner</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bola Lari</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 
 <body>
-  <div id="ui">
-    <div id="menu" class="overlay center">
-      <div class="cloud cloud-left"></div>
-      <div class="cloud cloud-right"></div>
-      <div class="ball-badge" aria-hidden="true"></div>
-      <p class="eyebrow">3D Soccer Runner</p>
-      <h1><span>BOLA</span> RUNNER</h1>
-      <p class="tagline">Lewati rintangan, kumpulkan koin, dan capai garis finish di lapangan bola.</p>
+    <div id="ui">
+        <div id="menu" class="overlay center">
+            <div class="cloud cloud-left"></div>
+            <div class="cloud cloud-right"></div>
+            <div class="ball-badge" aria-hidden="true"></div>
+            <p class="eyebrow">3D Bola Lari</p>
+            <h1><span>BOLA</span> JALAN </h1>
+            <p class="tagline">Lewati rintangan, kumpulkan koin, dan capai garis finish di lapangan bola.</p>
 
-      <div class="menu-grid">
-        <div class="menu-card controls-card">
-          <h2>Setup Game</h2>
-          <div class="field-row">
-            <label for="mapSelect">Map</label>
-            <select id="mapSelect">
+            <div class="menu-grid">
+                <div class="menu-card controls-card">
+                    <h2>Permainan pengaturan</h2>
+                    <div class="field-row">
+                        <label for="mapSelect">Peta</label>
+                        <select id="mapSelect">
               <option value="stadium">Stadion Sepak Bola</option>
               <option value="city">Jalanan Kota</option>
             </select>
-          </div>
-          <div class="field-row">
-            <label for="levelSelect">Level</label>
-            <select id="levelSelect">
-              <option value="1">Level 1 - Easy</option>
+                    </div>
+                    <div class="field-row">
+                        <label for="levelSelect">Level</label>
+                        <select id="levelSelect">
+              <option value="1">Level 1 - Mudah</option>
               <option value="2" selected>Level 2 - Normal</option>
-              <option value="3">Level 3 - Hard</option>
-              <option value="4">Level 4 - Expert</option>
-              <option value="5">Level 5 - Nightmare</option>
+              <option value="3">Level 3 - Susah</option>
+              <option value="4">Level 4 - Jago</option>
+              <option value="5">Level 5 - ProPlayer</option>
             </select>
-          </div>
-          <div id="levelDesc" class="level-desc">Level 2: Tantangan seimbang. Kecepatan standar.</div>
+                    </div>
+                    <div id="levelDesc" class="level-desc">Level 2: Tantangan seimbang. Kecepatan standar.</div>
+                </div>
+
+                <div class="menu-card guide-card">
+                    <h2>Tutorial</h2>
+                    <ul>
+                        <li>ArrowLeft / ArrowRight untuk pindah jalur.</li>
+                        <li>ArrowUp atau Space untuk melompat.</li>
+                        <li>ArrowDown untuk turun cepat saat sedang melompat.</li>
+                        <li>Di HP: tap bagian atas untuk lompat, bawah kiri/kanan untuk pindah jalur.</li>
+                    </ul>
+                </div>
+
+                <div class="menu-card rules-card">
+                    <h2>Rules</h2>
+                    <ul>
+                        <li>Hindari cone, barrier, dan spike. Tabrakan membuat game over.</li>
+                        <li>Kumpulkan koin untuk membeli skin bola di shop.</li>
+                        <li>Power-up shield melindungi dari satu tabrakan.</li>
+                        <li>Power-up 2X score menggandakan skor sementara.</li>
+                        <li>Score 7000 membuka garis finish dan menyelesaikan permainan.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="row action-row">
+                <button id="startBtn" class="main-btn">Mulai</button>
+                <button id="tutorialBtn" class="main-btn secondary">Praktik</button>
+                <button id="shopBtn" class="main-btn shop">TOKO BAJU</button>
+            </div>
         </div>
 
-        <div class="menu-card guide-card">
-          <h2>Tutorial</h2>
-          <ul>
-            <li>ArrowLeft / ArrowRight untuk pindah jalur.</li>
-            <li>ArrowUp atau Space untuk melompat.</li>
-            <li>ArrowDown untuk turun cepat saat sedang melompat.</li>
-            <li>Di HP: tap bagian atas untuk lompat, bawah kiri/kanan untuk pindah jalur.</li>
-          </ul>
+        <div id="hud" class="overlay top-left hidden">
+            <div id="score">Skor: 0</div>
+            <div id="highscore">Skor Tertinggi: 0</div>
+            <div id="speedLevel">Kelajuan: 1.0x</div>
+            <div id="coinCount">Koin: 0 coin</div>
+            <button id="exitGameBtn" style="background: #e74c3c; padding: 6px 10px; font-size: 11px; font-weight: bold; margin-top: 4px;">Keluar</button>
         </div>
 
-        <div class="menu-card rules-card">
-          <h2>Rules</h2>
-          <ul>
-            <li>Hindari cone, barrier, dan spike. Tabrakan membuat game over.</li>
-            <li>Kumpulkan koin untuk membeli skin bola di shop.</li>
-            <li>Power-up shield melindungi dari satu tabrakan.</li>
-            <li>Power-up 2X score menggandakan skor sementara.</li>
-            <li>Score 7000 membuka garis finish dan menyelesaikan permainan.</li>
-          </ul>
+        <div id="powerups" class="overlay top-right hidden"></div>
+
+        <div id="tutorial" class="overlay center hidden">
+            <div id="tutorialText">Tekan ArrowRight untuk pindah ke jalur kanan. ArrowUp untuk melompat.</div>
+            <button id="skipTutorial">Lewati</button>
         </div>
-      </div>
 
-      <div class="row action-row">
-        <button id="startBtn" class="main-btn">Play</button>
-        <button id="tutorialBtn" class="main-btn secondary">Practice</button>
-        <button id="shopBtn" class="main-btn shop">Skin Shop</button>
-      </div>
+        <!-- Skin Shop Modal/Panel -->
+        <div id="shopPanel" class="overlay center hidden">
+            <h2 style="margin-bottom: 10px; text-shadow: 0 0 10px #e67e22;">TOKO BAJU</h2>
+            <div style="font-size: 16px; font-weight: bold; color: #ffd700; margin-bottom: 12px;">
+                Koin Anda: <span id="shopCoinCount">0</span> coin
+            </div>
+            <div id="skinList" class="skin-container">
+                <!-- Skins will be rendered dynamically here -->
+            </div>
+            <div class="row" style="margin-top: 15px;">
+                <button id="closeShopBtn" style="background: #7f8c8d; font-weight: bold;">Kembali</button>
+            </div>
+        </div>
+
+        <div id="gameover" class="overlay center hidden">
+            <h2 id="gameoverTitle">Permainan Selesai</h2>
+            <div id="finalScore" style="margin-bottom: 12px;">Skor: 0</div>
+            <div class="row">
+                <button id="restartBtn">Mulai Ulang</button>
+                <button id="menuBtn" style="background: #7f8c8d; font-weight: bold;">Menu Utama</button>
+            </div>
+        </div>
     </div>
 
-    <div id="hud" class="overlay top-left hidden">
-      <div id="score">Score: 0</div>
-      <div id="highscore">High: 0</div>
-      <div id="speedLevel">Speed: 1.0x</div>
-      <div id="coinCount">Coins: 0 coin</div>
-      <button id="exitGameBtn" style="background: #e74c3c; padding: 6px 10px; font-size: 11px; font-weight: bold; margin-top: 4px;">Keluar</button>
-    </div>
+    <canvas id="gameCanvas"></canvas>
 
-    <div id="powerups" class="overlay top-right hidden"></div>
-
-    <div id="tutorial" class="overlay center hidden">
-      <div id="tutorialText">Tekan ArrowRight untuk pindah ke jalur kanan. ArrowUp untuk melompat.</div>
-      <button id="skipTutorial">Skip</button>
-    </div>
-
-    <!-- Skin Shop Modal/Panel -->
-    <div id="shopPanel" class="overlay center hidden">
-      <h2 style="margin-bottom: 10px; text-shadow: 0 0 10px #e67e22;">SKIN SHOP</h2>
-      <div style="font-size: 16px; font-weight: bold; color: #ffd700; margin-bottom: 12px;">
-        Koin Anda: <span id="shopCoinCount">0</span> coin
-      </div>
-      <div id="skinList" class="skin-container">
-        <!-- Skins will be rendered dynamically here -->
-      </div>
-      <div class="row" style="margin-top: 15px;">
-        <button id="closeShopBtn" style="background: #7f8c8d; font-weight: bold;">Kembali</button>
-      </div>
-    </div>
-
-    <div id="gameover" class="overlay center hidden">
-      <h2 id="gameoverTitle">Game Over</h2>
-      <div id="finalScore" style="margin-bottom: 12px;">Score: 0</div>
-      <div class="row">
-        <button id="restartBtn">Restart</button>
-        <button id="menuBtn" style="background: #7f8c8d; font-weight: bold;">Menu Utama</button>
-      </div>
-    </div>
-  </div>
-
-  <canvas id="gameCanvas"></canvas>
-
-  <script src="game.js"></script>
+    <script src="game.js"></script>
 </body>
 
 </html>
