@@ -2,10 +2,122 @@
 const canvas = document.getElementById('gameCanvas');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(window.devicePixelRatio);
+if (THREE.SRGBColorSpace) {
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+}
 
 const scene = new THREE.Scene();
 
 let activeMap = 'stadium';
+const textureLoader = new THREE.TextureLoader();
+let activeBackgroundTexture = null;
+let activeBackgroundAspect = 1;
+
+function fitBackgroundTexture(texture, imageAspect) {
+  if (!texture || !imageAspect) return;
+  const viewportAspect = innerWidth / innerHeight;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+
+  if (viewportAspect > imageAspect) {
+    texture.repeat.set(1, imageAspect / viewportAspect);
+    texture.offset.set(0, (1 - texture.repeat.y) / 2);
+  } else {
+    texture.repeat.set(viewportAspect / imageAspect, 1);
+    texture.offset.set((1 - texture.repeat.x) / 2, 0);
+  }
+  texture.needsUpdate = true;
+}
+
+function setResponsiveCamera() {
+  const aspect = innerWidth / innerHeight;
+  if (aspect < 0.75) {
+    camera.fov = 68;
+    camera.position.set(0, 7.4, 13.8);
+  } else if (aspect < 1.15) {
+    camera.fov = 64;
+    camera.position.set(0, 6.8, 13.0);
+  } else {
+    camera.fov = 60;
+    camera.position.set(0, 6, 12);
+  }
+  camera.lookAt(0, 0.9, -10);
+}
+
+function setGroundWidth(width) {
+  const currentMap = ground.material ? ground.material.map : null;
+  if (ground.geometry) ground.geometry.dispose();
+  ground.geometry = new THREE.BoxGeometry(width, 0.1, 220);
+  ground.position.z = -100;
+  if (currentMap) currentMap.needsUpdate = true;
+}
+
+function createStadiumBackgroundTexture() {
+  const bgCanvas = document.createElement('canvas');
+  bgCanvas.width = 1024;
+  bgCanvas.height = 576;
+  const ctx = bgCanvas.getContext('2d');
+
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, 280);
+  skyGrad.addColorStop(0, '#3a86c8');
+  skyGrad.addColorStop(1, '#9bd8f0');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.72)';
+  function drawCloud(cx, cy, r) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.arc(cx - r * 0.7, cy + r * 0.2, r * 0.75, 0, Math.PI * 2);
+    ctx.arc(cx + r * 0.75, cy + r * 0.18, r * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  drawCloud(170, 110, 34);
+  drawCloud(520, 74, 28);
+  drawCloud(820, 132, 42);
+
+  ctx.fillStyle = '#39495c';
+  ctx.fillRect(0, 242, bgCanvas.width, 92);
+  ctx.fillStyle = '#f0f4f7';
+  for (let x = 0; x < bgCanvas.width; x += 52) {
+    ctx.fillRect(x, 258, 28, 12);
+    ctx.fillRect(x + 20, 292, 30, 12);
+  }
+  ctx.fillStyle = '#253241';
+  ctx.fillRect(0, 324, bgCanvas.width, 22);
+
+  const fieldGrad = ctx.createLinearGradient(0, 300, 0, bgCanvas.height);
+  fieldGrad.addColorStop(0, '#4bb653');
+  fieldGrad.addColorStop(1, '#166f32');
+  ctx.fillStyle = fieldGrad;
+  ctx.fillRect(0, 346, bgCanvas.width, 230);
+
+  for (let x = -40; x < bgCanvas.width; x += 110) {
+    ctx.fillStyle = x % 220 === 0 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+    ctx.beginPath();
+    ctx.moveTo(x, 346);
+    ctx.lineTo(x + 100, 346);
+    ctx.lineTo(x + 190, bgCanvas.height);
+    ctx.lineTo(x - 70, bgCanvas.height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(512, 352);
+  ctx.lineTo(512, 576);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(512, 430, 108, 34, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeRect(310, 488, 404, 84);
+
+  const tex = new THREE.CanvasTexture(bgCanvas);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000);
 camera.position.set(0,6,12);
@@ -17,6 +129,8 @@ dir.position.set(5,10,7);
 scene.add(dir);
 
 const lanes = [-2.5,0,2.5];
+const CITY_ROAD_WIDTH = 12.6;
+const CITY_POLE_X = 5.35;
 let currentLane = 1;
 
 let isJumping = false;
@@ -76,17 +190,28 @@ function applyMapTheme(mapName) {
   
   // 2. Set theme parameters
   if (mapName === 'city') {
-    // Synthwave / Neon theme
-    scene.background = new THREE.Color(0x0a0216);
+    setGroundWidth(CITY_ROAD_WIDTH);
+
+    const cityBgTex = textureLoader.load('city.jpeg', (texture) => {
+      activeBackgroundTexture = texture;
+      activeBackgroundAspect = texture.image.width / texture.image.height;
+      if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+      fitBackgroundTexture(texture, activeBackgroundAspect);
+    });
+    if (THREE.SRGBColorSpace) cityBgTex.colorSpace = THREE.SRGBColorSpace;
+    scene.background = cityBgTex;
+    activeBackgroundTexture = cityBgTex;
+    activeBackgroundAspect = 626 / 348;
+    fitBackgroundTexture(cityBgTex, activeBackgroundAspect);
     
     // Ambient light - purple/pink tint
-    ambient.color.setHex(0x5e2a84);
-    ambient.groundColor.setHex(0x0a0216);
+    ambient.color.setHex(0xb6d8ff);
+    ambient.groundColor.setHex(0x1c2330);
     ambient.intensity = 0.8;
     
-    // Directional light - cyan highlights
-    dir.color.setHex(0x00f0ff);
-    dir.intensity = 0.8;
+    // Directional light - clean city daylight highlights
+    dir.color.setHex(0xffffff);
+    dir.intensity = 0.75;
     
     // Ground - neon grid texture
     const gridCanvas = document.createElement('canvas');
@@ -103,33 +228,23 @@ function applyMapTheme(mapName) {
     const gridTex = new THREE.CanvasTexture(gridCanvas);
     gridTex.wrapS = THREE.RepeatWrapping;
     gridTex.wrapT = THREE.RepeatWrapping;
-    gridTex.repeat.set(4, 100);
+    gridTex.repeat.set(6, 100);
     
     ground.material = new THREE.MeshStandardMaterial({
       map: gridTex,
       roughness: 0.1,
       metalness: 0.1
     });
-    
-    // Sky Plane (city_bg.png photo background)
-    const textureLoader = new THREE.TextureLoader();
-    const cityBgTex = textureLoader.load('city_bg.png');
-    const skyGeom = new THREE.PlaneGeometry(180, 100);
-    const skyMat = new THREE.MeshBasicMaterial({map: cityBgTex, depthWrite: false});
-    const sky = new THREE.Mesh(skyGeom, skyMat);
-    sky.position.set(0, 32, -185);
-    scene.add(sky);
-    mapDecorations.push(sky);
-    
+
     // Spawn Neon Light Poles
     for (let z = 0; z >= -180; z -= 30) {
-      createNeonPole(-4.8, z, 0x00ffff); // Left: cyan
-      createNeonPole(4.8, z, 0xff00ff);  // Right: pink
+      createNeonPole(-CITY_POLE_X, z, 0x00ffff); // Left: cyan
+      createNeonPole(CITY_POLE_X, z, 0xff00ff);  // Right: pink
     }
     
   } else {
     // Stadium / Soccer theme
-    scene.background = new THREE.Color(0x78c0e0); // Sky blue
+    setGroundWidth(13.5);
     
     // Ambient light - warm white
     ambient.color.setHex(0xffffff);
@@ -171,36 +286,11 @@ function applyMapTheme(mapName) {
       metalness: 0.1
     });
     
-    // Stadium Sky Plane
-    const skyCanvas = document.createElement('canvas');
-    skyCanvas.width = 512;
-    skyCanvas.height = 256;
-    const skyCtx = skyCanvas.getContext('2d');
-    const skyGrad = skyCtx.createLinearGradient(0, 0, 0, 256);
-    skyGrad.addColorStop(0, '#3a86c8');
-    skyGrad.addColorStop(1, '#8bc6ec');
-    skyCtx.fillStyle = skyGrad;
-    skyCtx.fillRect(0, 0, 512, 256);
-    // Clouds
-    skyCtx.fillStyle = 'rgba(255,255,255,0.6)';
-    function drawCloud(cx, cy, r) {
-      skyCtx.beginPath();
-      skyCtx.arc(cx, cy, r, 0, Math.PI * 2);
-      skyCtx.arc(cx - r*0.6, cy + r*0.2, r*0.7, 0, Math.PI * 2);
-      skyCtx.arc(cx + r*0.6, cy + r*0.2, r*0.7, 0, Math.PI * 2);
-      skyCtx.fill();
-    }
-    drawCloud(100, 80, 25);
-    drawCloud(280, 120, 30);
-    drawCloud(420, 90, 22);
-    
-    const skyTex = new THREE.CanvasTexture(skyCanvas);
-    const skyGeom = new THREE.PlaneGeometry(180, 100);
-    const skyMat = new THREE.MeshBasicMaterial({map: skyTex, depthWrite: false});
-    const sky = new THREE.Mesh(skyGeom, skyMat);
-    sky.position.set(0, 32, -185);
-    scene.add(sky);
-    mapDecorations.push(sky);
+    const stadiumBgTex = createStadiumBackgroundTexture();
+    activeBackgroundTexture = stadiumBgTex;
+    activeBackgroundAspect = 1024 / 576;
+    scene.background = stadiumBgTex;
+    fitBackgroundTexture(stadiumBgTex, activeBackgroundAspect);
     
     // Spawn Stadium Light Towers
     for (let z = 0; z >= -180; z -= 50) {
@@ -345,6 +435,8 @@ let speedBoostTimer = null;
 let doubleScoreTimer = null;
 let doubleScoreBlink = null;
 let shieldTimer = null;
+let shieldExpiresAt = 0;
+const SHIELD_DURATION_MS = 6000;
 
 // UI refs
 const menu = document.getElementById('menu');
@@ -366,6 +458,8 @@ const restartBtn = document.getElementById('restartBtn');
 const levelSelect = document.getElementById('levelSelect');
 const levelDesc = document.getElementById('levelDesc');
 const coinCountEl = document.getElementById('coinCount');
+const shieldTimerEl = document.getElementById('shieldTimer');
+const shieldTimeLeftEl = document.getElementById('shieldTimeLeft');
 const shopBtn = document.getElementById('shopBtn');
 const shopPanel = document.getElementById('shopPanel');
 const closeShopBtn = document.getElementById('closeShopBtn');
@@ -478,8 +572,10 @@ updateShopUI();
 
 function onResize(){
   renderer.setSize(innerWidth, innerHeight);
+  setResponsiveCamera();
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
+  fitBackgroundTexture(activeBackgroundTexture, activeBackgroundAspect);
 }
 window.addEventListener('resize', onResize);
 onResize();
@@ -487,11 +583,12 @@ onResize();
 // Input
 window.addEventListener('keydown', (e)=>{
   if(!running) return;
-  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
-  if(e.key==='ArrowLeft') moveLeft();
-  if(e.key==='ArrowRight') moveRight();
-  if(e.key==='ArrowUp' || e.key===' ') jump();
-  if(e.key==='ArrowDown') slamDown();
+  const key = e.key.toLowerCase();
+  if(['arrowleft','arrowright','arrowup','arrowdown',' ','a','d','w','s'].includes(key)) e.preventDefault();
+  if(key==='arrowleft' || key==='a') moveLeft();
+  if(key==='arrowright' || key==='d') moveRight();
+  if(key==='arrowup' || key==='w' || key===' ') jump();
+  if(key==='arrowdown' || key==='s') slamDown();
 });
 
 function moveLeft(){
@@ -588,6 +685,92 @@ function spawnBarrier(){
   
   group.position.set(lanes[laneIdx], 0, -80);
   group.userData = {lane: laneIdx, type: 'barrier'};
+  scene.add(group);
+  obstacles.push(group);
+}
+
+function createOverheadSignTexture(){
+  const signCanvas = document.createElement('canvas');
+  signCanvas.width = 256;
+  signCanvas.height = 256;
+  const ctx = signCanvas.getContext('2d');
+
+  ctx.fillStyle = '#f6e6bf';
+  ctx.fillRect(0, 0, 256, 256);
+
+  ctx.fillStyle = '#d71920';
+  for (let x = 0; x < 256; x += 42) {
+    ctx.fillRect(x, 0, 22, 56);
+    ctx.fillRect(x + 20, 200, 22, 56);
+  }
+
+  ctx.strokeStyle = '#c8131a';
+  ctx.lineWidth = 28;
+  ctx.beginPath();
+  ctx.moveTo(36, 82);
+  ctx.lineTo(128, 156);
+  ctx.lineTo(220, 82);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#d71920';
+  ctx.lineWidth = 20;
+  ctx.beginPath();
+  ctx.moveTo(44, 154);
+  ctx.lineTo(128, 218);
+  ctx.lineTo(212, 154);
+  ctx.stroke();
+
+  ctx.fillStyle = '#82b7d8';
+  ctx.strokeStyle = '#5c8fb0';
+  ctx.lineWidth = 5;
+  [[42, 42], [214, 42], [42, 214], [214, 214]].forEach(([x, y]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  });
+
+  const texture = new THREE.CanvasTexture(signCanvas);
+  if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function spawnOverheadSign(){
+  const laneIdx = Math.floor(Math.random()*3);
+  const group = new THREE.Group();
+
+  const signTex = createOverheadSignTexture();
+  const signMat = new THREE.MeshStandardMaterial({map: signTex, roughness: 0.45, metalness: 0.05});
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(2.25, 2.25, 0.22), signMat);
+  sign.position.y = 2.85;
+  group.add(sign);
+
+  const frameMat = new THREE.MeshStandardMaterial({color: activeMap === 'city' ? 0x161616 : 0xe74c3c, roughness: 0.45});
+  const topRail = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.14, 0.32), frameMat);
+  topRail.position.y = 4.05;
+  group.add(topRail);
+
+  const bottomRail = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.14, 0.32), frameMat);
+  bottomRail.position.y = 1.65;
+  group.add(bottomRail);
+
+  const legGeom = new THREE.BoxGeometry(0.22, 1.55, 0.22);
+  const legMat = new THREE.MeshStandardMaterial({color: activeMap === 'city' ? 0xffcc33 : 0xd9983d, roughness: 0.6});
+  const leftLeg = new THREE.Mesh(legGeom, legMat);
+  leftLeg.position.set(-0.78, 0.8, 0);
+  group.add(leftLeg);
+
+  const rightLeg = new THREE.Mesh(legGeom, legMat);
+  rightLeg.position.set(0.78, 0.8, 0);
+  group.add(rightLeg);
+
+  const baseMat = new THREE.MeshStandardMaterial({color: activeMap === 'city' ? 0x00c8ff : 0x8fd1f4, roughness: 0.35});
+  const base = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.12, 1.1), baseMat);
+  base.position.y = 0.08;
+  group.add(base);
+
+  group.position.set(lanes[laneIdx], 0, -80);
+  group.userData = {lane: laneIdx, type: 'overhead'};
   scene.add(group);
   obstacles.push(group);
 }
@@ -740,16 +923,20 @@ function updateSpawn(dt){
       const obstacleRand = Math.random();
       const isHardOrAbove = Number(currentLevel) >= 3;
       if (isHardOrAbove) {
-        if(obstacleRand < 0.3) {
+        if(obstacleRand < 0.25) {
+          spawnOverheadSign();
+        } else if(obstacleRand < 0.5) {
           spawnBarrier();
-        } else if(obstacleRand < 0.6) {
+        } else if(obstacleRand < 0.75) {
           spawnTripleSpikes();
         } else {
           spawnObstacle();
         }
       } else {
         // Below Level 3 (Easy/Normal): No triple spikes
-        if(obstacleRand < 0.4) {
+        if(obstacleRand < 0.3) {
+          spawnOverheadSign();
+        } else if(obstacleRand < 0.55) {
           spawnBarrier();
         } else {
           spawnObstacle();
@@ -770,6 +957,7 @@ function checkCollision(){
   for(const obs of obstacles){
     const isBarrier = obs.userData && obs.userData.type === 'barrier';
     const isSpike = obs.userData && obs.userData.type === 'spike';
+    const isOverhead = obs.userData && obs.userData.type === 'overhead';
     if(isBarrier){
       if(obs.userData.lane === currentLane){
         const distZ = Math.abs(p.z - obs.position.z);
@@ -781,6 +969,18 @@ function checkCollision(){
             } else {
               gameOver();
             }
+          }
+        }
+      }
+    } else if(isOverhead){
+      if(obs.userData.lane === currentLane){
+        const distZ = Math.abs(p.z - obs.position.z);
+        if(distZ < 1.35 && p.y > 1.45){
+          if(powerState.shield){
+            deactivateShield(true, obs);
+            remove.push(obs);
+          } else {
+            gameOver();
           }
         }
       }
@@ -827,8 +1027,23 @@ function removeItem(it){
   items = items.filter(x=>x!==it);
 }
 
+function updateShieldTimerDisplay(){
+  if(!shieldTimerEl || !shieldTimeLeftEl) return;
+
+  if(!powerState.shield){
+    shieldTimerEl.classList.add('hidden');
+    shieldTimeLeftEl.innerText = '0.0s';
+    return;
+  }
+
+  const remainingMs = Math.max(0, shieldExpiresAt - performance.now());
+  shieldTimeLeftEl.innerText = (remainingMs / 1000).toFixed(1) + 's';
+  shieldTimerEl.classList.remove('hidden');
+}
+
 function activateShield(){
   powerState.shield = true;
+  shieldExpiresAt = performance.now() + SHIELD_DURATION_MS;
   // visual
   if(!shieldMesh){
     const g = new THREE.SphereGeometry(1.2,32,32);
@@ -837,15 +1052,17 @@ function activateShield(){
     ball.add(shieldMesh);
   }
   showPowerText('SHIELD ACTIVE');
+  updateShieldTimerDisplay();
   
   if(shieldTimer) clearTimeout(shieldTimer);
   shieldTimer = setTimeout(()=>{
     deactivateShield(false);
-  }, 6000);
+  }, SHIELD_DURATION_MS);
 }
 
 function deactivateShield(clearObs, obs){
   powerState.shield = false;
+  shieldExpiresAt = 0;
   if(shieldMesh){
     ball.remove(shieldMesh);
     shieldMesh = null;
@@ -854,6 +1071,7 @@ function deactivateShield(clearObs, obs){
     clearTimeout(shieldTimer);
     shieldTimer = null;
   }
+  updateShieldTimerDisplay();
   if(clearObs && obs){
     removeObstacle(obs);
     // brief invulnerability visual
@@ -906,6 +1124,7 @@ function applyItem(kind, it){
 
 function update(dt){
   if(!running) return;
+  updateShieldTimerDisplay();
 
   const settings = difficultySettings[currentLevel];
   // Increment play time and gradually increase baseSpeed based on playTime (the longer you play, the faster the speed)
@@ -1055,7 +1274,7 @@ function startGame(isTutorial){
     tutorialEl.classList.remove('hidden');
     // slow motion
     speed = baseSpeed * 0.15;
-    tutorialText.innerText = 'Tekan ArrowRight/ArrowLeft pindah jalur. ArrowUp untuk lompat.';
+    tutorialText.innerText = 'Tekan ArrowRight/ArrowLeft atau A/D pindah jalur. ArrowUp, W, atau Space untuk lompat.';
   } else { tutorialEl.classList.add('hidden'); speed = baseSpeed }
   // Reset lastTime to prevent lag spike jump on start
   lastTime = performance.now();
@@ -1135,6 +1354,8 @@ function resetGame(){
   if(doubleScoreTimer) { clearTimeout(doubleScoreTimer); doubleScoreTimer = null; }
   if(doubleScoreBlink) { clearInterval(doubleScoreBlink); doubleScoreBlink = null; }
   if(shieldTimer) { clearTimeout(shieldTimer); shieldTimer = null; }
+  shieldExpiresAt = 0;
+  updateShieldTimerDisplay();
   scoreEl.style.visibility = 'visible';
 
   // Reset environment elements to starting positions
